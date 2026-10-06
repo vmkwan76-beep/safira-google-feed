@@ -1,0 +1,38 @@
+name: Gerar feed Google Merchant Center
+
+on:
+  schedule:
+    - cron: "0 8 * * *"   # todo dia 05:00 (horário de Brasília)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Gerar feed
+        run: |
+          mkdir -p public
+          python gerar_feed.py public/feed.xml
+          echo "<p>Feed Safira: <a href='feed.xml'>feed.xml</a></p>" > public/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deploy
+        uses: actions/deploy-pages@v4
