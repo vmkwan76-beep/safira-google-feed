@@ -25,14 +25,49 @@ UA = "Mozilla/5.0 (compatible; SafiraFeedBot/1.0; +https://www.safiraarmarinhos.
 MAX_FOTOS_EXTRAS = 10
 TRABALHADORES = 4
 
+# Marcas procuradas no nome do produto (o cadastro costuma terminar com a marca).
+# Ordem importa: a mais específica primeiro. Chave sem acento, minúscula.
+MARCAS_NO_TITULO = [
+    ("linhas corrente", "Linhas Corrente"), ("roma aviamentos", "Roma"),
+    ("mestres sirgueiros", "Mestres Sirgueiros"), ("botoes e cia", "Botões e Cia"),
+    ("toke e crie", "Toke e Crie"), ("santa margarida", "Santa Margarida"),
+    ("almeida lima", "Almeida Lima"), ("tek bond", "Tekbond"), ("tekbond", "Tekbond"),
+    ("sao jose", "São José"), ("santa fe", "Santa Fé"), ("di pietra", "Di Pietra"),
+    ("circulo", "Círculo"), ("pingouin", "Pingouin"), ("euroroma", "EuroRoma"),
+    ("acrilex", "Acrilex"), ("supremo", "Supremo"), ("anchor", "Anchor"), ("cisne", "Linhas Corrente"),
+    ("dohler", "Döhler"), ("kohatsu", "Kohatsu"), ("artepunto", "Artepunto"), ("nybc", "NYBC"),
+    ("botelho", "Botelho"), ("valletex", "Valletex"), ("progresso", "Progresso"),
+    ("peripan", "Peripan"), ("jowama", "Jowama"), ("prochownik", "Prochownik"),
+    ("pietra", "Di Pietra"), ("fibram", "Fibram"), ("incomfio", "Incomfio"), ("gatte", "Gatte"),
+    ("carvalho", "Carvalho"), ("singer", "Singer"), ("scafir", "Scafir"), ("preconiz", "Preconiz"),
+    ("lomaer", "Lomaer"), ("fischer", "Fischer"), ("pegamil", "Pegamil"), ("acrilpen", "Acrilpen"),
+    ("tupy", "Tupy"), ("gruber", "Gruber"), ("make", "Make+"), ("coats", "Coats"),
+]
+
+# Marca do cadastro do site (slug do JSON-LD) -> nome certo
 MARCAS = {
-    "circulo": "Círculo",
-    "pingouin": "Pingouin",
-    "euroroma": "EuroRoma",
-    "acrilex": "Acrilex",
-    "anchor": "Anchor",
-    "corrente": "Corrente",
+    "circulo": "Círculo", "pingouin": "Pingouin", "euroroma": "EuroRoma", "acrilex": "Acrilex",
+    "anchor": "Anchor", "corrente": "Linhas Corrente", "linhas-corrente": "Linhas Corrente",
+    "sao-jose": "São José", "di-pietra": "Di Pietra", "santa-fe": "Santa Fé",
+    "roma-aviamentos": "Roma", "santa-margarida": "Santa Margarida", "nybc": "NYBC",
+    "dohler": "Döhler",
 }
+
+
+def sem_acento(texto):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn")
+
+
+def descobrir_marca(titulo, marca_site):
+    t = " " + re.sub(r"[^a-z0-9]+", " ", sem_acento(titulo).lower()) + " "
+    for chave, nome in MARCAS_NO_TITULO:
+        if f" {chave} " in t:
+            return nome
+    m = sem_acento(marca_site or "").strip().lower()
+    if not m or m == "safira armarinhos":
+        return ""
+    return MARCAS.get(m, (marca_site or "").replace("-", " ").strip().title())
 
 # Palavras que ficam em minúsculas no meio do título
 MINUSCULAS = {"de", "da", "do", "das", "dos", "e", "com", "para", "em", "a", "o"}
@@ -114,13 +149,7 @@ def ler_produto(prod):
             continue
         if d.get("@type") == "Product":
             marca = (d.get("brand") or {}).get("name", "") if isinstance(d.get("brand"), dict) else ""
-    marca = marca.strip()
-    if not marca or marca.lower() == "safira armarinhos":
-        # No cadastro a marca do fabricante costuma ser a última palavra do nome
-        ultima = re.sub(r"[^\wÀ-ÿ]", "", prod["titulo"].split()[-1]) if prod["titulo"].split() else ""
-        if ultima.isalpha() and len(ultima) > 2:
-            marca = ultima
-    marca = MARCAS.get(marca.lower(), marca.title()) if marca else ""
+    marca = descobrir_marca(prod["titulo"], marca)
 
     # Fotos por SKU (miniaturas da galeria marcadas com data-skus)
     fotos_sku = {}
