@@ -269,11 +269,159 @@ def frete_item(peso_kg):
 
 
 def nome_cor(nome_variante, titulo_pai):
-    """'LA MOLLET 100G CIRCULO - 010 - BRANCO' -> '010 - BRANCO'."""
+    """'LA MOLLET 100G CIRCULO - 010 - BRANCO' -> '010 BRANCO'.
+
+    Também tira o nome do produto repetido no início ('LA POP SHOCK 100G 5990 BOSQUE'
+    -> '5990 BOSQUE') e o hífen grudado no código ('8099 -DALMATA', '5009-SUSSURRO')."""
     resto = nome_variante
     if resto.upper().startswith(titulo_pai.upper()):
         resto = resto[len(titulo_pai):]
-    return re.sub(r"\s+-\s+", " ", resto.strip(" -"))
+    resto = re.sub(r"\s+-\s*|\s*-\s+", " ", resto.strip(" -*"))
+    resto = re.sub(r"^\*\s*|\s\*\s", " ", resto).strip()
+    resto = re.sub(r"(?<=\d)-|(?<=\d[A-Za-z])-", " ", resto)
+    do_pai = set(re.findall(r"[a-z0-9]+", sem_acento(titulo_pai).lower())) | {"cor"}
+    palavras = resto.split()
+    while len(palavras) > 1:
+        w = sem_acento(palavras[0]).lower().strip(".,")
+        if w in do_pai or w + "s" in do_pai or w.rstrip("s") in do_pai:
+            palavras.pop(0)
+        else:
+            break
+    return " ".join(palavras)
+
+
+NUM = r"\d+(?:[.,]\d+)?"
+
+
+def _num(texto):
+    return float(texto.replace(".", "").replace(",", ".")) if re.fullmatch(r"\d{1,3}(\.\d{3})+", texto)         else float(texto.replace(",", "."))
+
+
+def _fmt(x):
+    return (f"{x:.1f}".rstrip("0").rstrip(".")).replace(".", ",")
+
+
+def ficha_tecnica(descricao):
+    """Lê o bloco DADOS TÉCNICOS da descrição: tex, composição, metros, gramas, agulhas.
+    Só devolve o que está escrito — nada é deduzido."""
+    partes = re.split(r"DADOS T[ÉE]CNICOS", descricao, flags=re.I)
+    if len(partes) < 2:
+        return {}
+    linhas = [l.replace(" ", " ").strip().lstrip("*").strip() for l in partes[1].splitlines()]
+    linhas = [l for l in linhas if l and "foto" not in l.lower()]
+    f = {}
+    for l in linhas:
+        b = sem_acento(l).lower()
+        valor = l.split(":", 1)[1].strip() if ":" in l else l
+        if "tex" in b and "tex" not in f:
+            m = re.search(r"(\d+)\s*\)?\s*tex|tex\s*:?\s*(\d+)", b)
+            if m:
+                f["tex"] = m.group(1) or m.group(2)
+        if b.startswith("composi") and "composicao" not in f:
+            f["composicao"] = valor.rstrip(". ")
+        if re.search(r"comprimento|metragem|metros|medidas|^peso|quantidade", b):
+            m = re.search(r"(" + NUM + r")\s*(?:m|mt|mts|metros)\b(?!m)", b)
+            if m and "metros" not in f:
+                f["metros"] = _num(m.group(1))
+            m = re.search(r"(" + NUM + r")\s*(kg|g|gr|gramas)\b", b)
+            if m and "gramas" not in f:
+                f["gramas"] = _num(m.group(1)) * (1000 if m.group(2) == "kg" else 1)
+        if ("agulh" in b or "ag." in b) and "malha" not in b:
+            faixa = re.search(r"(" + NUM + r")\s*(?:mm)?\s*a\s*(" + NUM + r")\s*mm", b)
+            unica = re.search(r"(" + NUM + r")\s*mm", b)
+            txt = (f"{_fmt(_num(faixa.group(1)))} a {_fmt(_num(faixa.group(2)))} mm" if faixa
+                   else f"{_fmt(_num(unica.group(1)))} mm" if unica else None)
+            if txt:
+                if "croch" in b:
+                    f.setdefault("agulha_croche", txt)
+                elif "trico" in b:
+                    f.setdefault("agulha_trico", txt)
+                else:
+                    f.setdefault("agulha", txt)
+    return f
+
+
+# (trecho sem acento, minúsculo) -> nome da fibra. Ordem importa: o mais específico primeiro.
+FIBRAS = [
+    ("baby alpaca", "Baby Alpaca"), ("alpaca", "Alpaca"), ("algodao mercerizado", "Algodão Mercerizado"),
+    ("algodao penteado", "Algodão Mercerizado"), ("algodao reciclado", "Algodão Reciclado"),
+    ("algodao", "Algodão"), ("acrilico", "Acrílico"), ("poliester", "Poliéster"),
+    ("poliamida", "Poliamida"), ("polipropileno", "Polipropileno"),
+    ("prolipropileno", "Polipropileno"), ("viscose", "Viscose"), ("elastano", "Elastano"),
+    ("juta", "Juta"), ("rafia", "Papel de Ráfia"), (r"metal\w*", "Fibra Metálica"), ("cera", "Cera"),
+    ("outras fibras", "outras fibras"), ("la", "Lã"),
+]
+
+
+def fibras(composicao):
+    """'90% Acrilico e 10% POLIAMIDA' -> [(90.0, 'Acrílico'), (10.0, 'Poliamida')].
+    Devolve [] se alguma parte não for uma fibra conhecida ou se não somar 100%."""
+    if not composicao:
+        return []
+    out = []
+    for pct, trecho in re.findall(r"(\d+(?:[.,]\d+)?)\s*[%$]\s*([^\d|/]*)", composicao):
+        t = re.sub(r"[^a-z ]", " ", sem_acento(trecho).lower())
+        t = re.sub(r"\b(e|de|no minimo|cor)\b", " ", t)
+        nome = next((n for k, n in FIBRAS if re.search(r"\b" + k + r"\b", t)), None)
+        if not nome:
+            return []
+        out.append((_num(pct), nome))
+    if not out or abs(sum(p for p, _ in out) - 100) > 1:
+        return []
+    return out
+
+
+def composicao_limpa(composicao):
+    """Texto do atributo g:material: padronizado quando as fibras são conhecidas."""
+    lista = fibras(composicao)
+    if lista:
+        return ", ".join(f"{p:g}".replace(".", ",") + f"% {n}" for p, n in lista)
+    texto = re.sub(r"(?i)^composi[cç][aã]o\s*:?\s*", "", composicao or "").strip(" |.")
+    return texto or None
+
+
+def material_curto(composicao):
+    """'90% Acrílico e 10% Poliamida' -> 'Acrílico e Poliamida'; '100% Algodão' -> '100% Algodão'.
+    Se o cadastro estiver incompleto ou com fibra desconhecida, devolve None."""
+    nomes = list(dict.fromkeys(n for _, n in fibras(composicao)))
+    if not nomes:
+        return None
+    if len(nomes) == 1:
+        return f"100% {nomes[0]}"
+    return " e ".join(nomes) if len(nomes) == 2 else f"{nomes[0]}, {nomes[1]} e outras"
+
+
+def detalhes_produto(ficha):
+    rotulos = [("composicao", "Composição"), ("metros", "Metragem"), ("gramas", "Peso"),
+               ("tex", "Espessura (TEX)"), ("agulha_croche", "Agulha de crochê"),
+               ("agulha_trico", "Agulha de tricô"), ("agulha", "Agulha recomendada")]
+    out = []
+    for chave, rotulo in rotulos:
+        if chave in ficha:
+            v = ficha[chave]
+            v = (f"{_fmt(v)} m" if chave == "metros" else f"{_fmt(v)} g" if chave == "gramas"
+                 else composicao_limpa(v) if chave == "composicao" else str(v))
+            out.append({"section_name": "Dados técnicos", "attribute_name": rotulo, "attribute_value": v})
+    return out
+
+
+def titulo_fio(base, ficha, cor, complemento):
+    """Nome + gramatura + marca primeiro (como a cliente busca), depois metragem,
+    material, cor e uso. Corta os atributos extras se passar de 150 caracteres."""
+    if "gramas" in ficha and not re.search(r"\d\s*(g|kg)\b", base.lower()):
+        base = f"{base} {_fmt(ficha['gramas'])}g"
+    extras = []
+    # em kit a metragem da ficha é de cada novelo — não vai no título para não confundir
+    if ("metros" in ficha and not re.search(r"\d\s*(m|mt|mts|metros)\b", base.lower())
+            and not base.lower().startswith("kit")):
+        extras.append(f"{_fmt(ficha['metros'])}m")
+    mat = material_curto(ficha.get("composicao"))
+    if mat:
+        extras.append(mat)
+    fim = (f" - Cor {cor}" if cor else "") + complemento
+    while extras and len(base + "".join(" - " + e for e in extras) + fim) > 150:
+        extras.pop()
+    return (base + "".join(" - " + e for e in extras) + fim)[:150]
 
 
 def montar_itens(prod, variantes):
@@ -285,12 +433,17 @@ def montar_itens(prod, variantes):
     complemento = f" - {complemento}" if complemento and "croch" not in sem_acento(base).lower() else ""
     tipo = tipo_produto(prod.get("categorias", []))
     realces = destaques(prod["descricao"])
+    fio = categoria_google == 2669
+    ficha = ficha_tecnica(prod["descricao"]) if fio else {}
     for v in variantes:
         cor = "" if unica else nome_cor(v.get("name", ""), prod["titulo"])
-        titulo = base
-        if cor:
-            titulo = f"{base} Cor {titulo_bonito(cor)}"
-        titulo += complemento
+        if fio:
+            titulo = titulo_fio(base, ficha, titulo_bonito(cor) if cor else "", complemento)
+        else:
+            titulo = base
+            if cor:
+                titulo = f"{base} Cor {titulo_bonito(cor)}"
+            titulo += complemento
         foto = v.get("image_url") or ""
         if foto.startswith("//"):
             foto = "https:" + foto
@@ -326,6 +479,8 @@ def montar_itens(prod, variantes):
             "google_product_category": categoria_google,
             "product_type": tipo,
             "product_highlight": realces,
+            "material": (composicao_limpa(ficha.get("composicao")) or "")[:200] if fio else None,
+            "product_detail": detalhes_produto(ficha) if fio else [],
             "shipping": frete_item(v.get("weight")),
             "_qtd": int(v.get("available_quantity") or 0) if disponivel else 0,
         }
