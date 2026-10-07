@@ -166,12 +166,104 @@ def ler_produto(prod):
         else:
             fotos_gerais.append(url)
 
+    cats = re.search(r'"item_category":"([^"]*)"(?:,"item_category2":"([^"]*)")?', pagina)
+    prod["categorias"] = [c for c in (cats.groups()[::-1] if cats else []) if c and c != "toda-a-loja"]
+
     titulo_m = re.search(r"<title>(.*?)</title>", pagina, re.S)
     prod["titulo_site"] = html.unescape(titulo_m.group(1).strip()) if titulo_m else ""
     prod["marca"] = marca
     prod["fotos_sku"] = fotos_sku
     prod["fotos_gerais"] = list(dict.fromkeys(fotos_gerais))
     return prod, variantes, None
+
+
+# (palavras no nome, sem acento) -> (id da categoria Google, complemento do título)
+# Primeira regra que casar vence. IDs da taxonomia oficial pt-BR do Google.
+CATEGORIAS_GOOGLE = [
+    (("agulha", "croch"), 6127, ""), (("agulha", "trico"), 6139, ""),
+    (("agulha", "tunisiana"), 6127, ""), (("agulha", "maquina"), 4579, ""),
+    (("agulha", "circular"), 6139, ""), (("agulha",), 5992, ""),
+    (("tesoura",), 504641, ""), (("alfinete de seguranca",), 6101, ""), (("alfinete",), 6159, ""),
+    (("marcador",), 6160, ""), (("abridor de casa",), 6161, ""), (("pistola",), 4073, ""),
+    (("cola",), 503745, ""), (("barbante",), 2669, "para Crochê"),
+    (("fio de malha",), 2669, "para Crochê"), (("la ",), 2669, "para Crochê e Tricô"),
+    (("fio ",), 2669, "para Crochê e Tricô"), (("novelo",), 2669, "para Crochê e Tricô"),
+    (("meada",), 49, "para Bordado"), (("mouline",), 49, "para Bordado"),
+    (("linha",), 49, ""), (("retros",), 49, ""),
+    (("fita",), 505419, ""), (("vies",), 505412, ""), (("passamanaria",), 505412, ""),
+    (("soutache",), 505412, ""), (("renda",), 505412, ""), (("bordado ingles",), 505412, ""),
+    (("passafita",), 505412, ""), (("sianinha",), 505412, ""), (("elastico",), 6146, ""),
+    (("botao",), 4226, ""), (("botoes",), 4226, ""), (("ziper",), 4174, ""),
+    (("fecho de bolsa",), 6145, ""), (("fecho",), 4174, ""), (("ilhos",), 505409, ""),
+    (("argola",), 505409, ""), (("mosquetao",), 505408, ""), (("lantejoula",), 505410, ""),
+    (("glitter",), 505410, ""), (("strass",), 5982, ""), (("pompom",), 505379, ""),
+    (("olhos",), 505379, ""), (("laco",), 505413, ""), (("lacinho",), 505413, ""),
+    (("entremeio",), 32, ""), (("contas",), 32, ""), (("fibra",), 505407, ""),
+    (("enchimento",), 505407, ""), (("refil de almofada",), 505407, ""), (("feltro",), 47, ""),
+    (("tecido",), 47, ""), (("tricoline",), 47, ""), (("eva",), 6117, ""),
+    (("corante",), 505415, ""), (("tinta",), 505417, ""), (("caneta para tecido",), 505417, ""),
+    (("toalha de mesa",), 4143, ""), (("kit",), 505370, ""),
+]
+CATEGORIA_PADRAO = 16  # Artes e entretenimento > Hobbies e artes > Arte e artesanato
+
+
+def classificar(titulo):
+    t = " " + re.sub(r"[^a-z0-9]+", " ", sem_acento(titulo).lower()) + " "
+    for chaves, gid, complemento in CATEGORIAS_GOOGLE:
+        # cada chave casa no início de palavra ("cola" não casa "escolar"); "la " exige palavra inteira
+        if all(re.search(r"\b" + re.escape(c.strip()) + (r"\b" if c.endswith(" ") else ""), t) for c in chaves):
+            return gid, complemento
+    return CATEGORIA_PADRAO, ""
+
+
+def tipo_produto(categorias):
+    """['croche-e-trico', 'fios-para-inverno'] -> 'Crochê e Tricô > Fios para Inverno'."""
+    nomes = {"croche": "Crochê", "trico": "Tricô", "la": "Lã", "eva": "EVA", "verao": "Verão"}
+    return " > ".join(
+        " ".join(nomes.get(w, w if w in ("e", "de", "para", "da", "do") else w.capitalize())
+                 for w in c.split("-"))
+        for c in categorias) or None
+
+
+def destaques(descricao):
+    """Linhas '*Composição: ...' do bloco DADOS TÉCNICOS da descrição (máx. 6)."""
+    itens = []
+    for linha in descricao.splitlines():
+        linha = linha.strip()
+        if linha.startswith("*") and "foto" not in linha.lower():
+            texto = linha.lstrip("* ").strip()
+            if 3 < len(texto) <= 150:
+                itens.append(texto)
+    return itens[:6]
+
+
+def carregar_frete(caminho="frete.json"):
+    try:
+        with open(caminho, encoding="utf-8") as f:
+            return json.load(f)["estados"]
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
+FRETE = carregar_frete()
+
+
+def frete_item(peso_kg):
+    """g:shipping por faixa de CEP (estado) com o preço/prazo da opção mais barata."""
+    if not FRETE or not peso_kg:
+        return []
+    regras = []
+    for estado in FRETE.values():
+        faixa = next((f for f in estado["faixas"] if peso_kg <= f["ate_kg"]), None)
+        if not faixa:
+            return []  # acima da maior faixa: usa a política de frete da conta
+        for prefixo in estado["cep"]:
+            regras.append({"country": "BR", "postal_code": prefixo,
+                           "price": f'{faixa["preco"]:.2f} BRL',
+                           "min_handling_time": 0, "max_handling_time": 1,
+                           "min_transit_time": faixa["dias_min"],
+                           "max_transit_time": faixa["dias_max"]})
+    return regras
 
 
 def nome_cor(nome_variante, titulo_pai):
@@ -187,11 +279,16 @@ def montar_itens(prod, variantes):
     unica = len(variantes) == 1
     base = titulo_bonito(prod["titulo"])
     descricao = re.sub(r"\n{3,}", "\n\n", prod["descricao"]).strip()[:5000]
+    categoria_google, complemento = classificar(prod["titulo"])
+    complemento = f" - {complemento}" if complemento and "croch" not in sem_acento(base).lower() else ""
+    tipo = tipo_produto(prod.get("categorias", []))
+    realces = destaques(prod["descricao"])
     for v in variantes:
         cor = "" if unica else nome_cor(v.get("name", ""), prod["titulo"])
         titulo = base
         if cor:
-            titulo = f"{base} - Cor {titulo_bonito(cor)}"
+            titulo = f"{base} Cor {titulo_bonito(cor)}"
+        titulo += complemento
         foto = v.get("image_url") or ""
         if foto.startswith("//"):
             foto = "https:" + foto
@@ -224,6 +321,10 @@ def montar_itens(prod, variantes):
             "mpn": None,
             "color": titulo_bonito(cor) if cor else None,
             "shipping_weight": f'{v["weight"]:.3f} kg' if v.get("weight") else None,
+            "google_product_category": categoria_google,
+            "product_type": tipo,
+            "product_highlight": realces,
+            "shipping": frete_item(v.get("weight")),
         }
         if not item["gtin"]:
             if item["brand"]:
@@ -246,7 +347,11 @@ def gerar_xml(itens):
                 continue
             tag = chave if chave in ("title", "description", "link") else "g:" + chave
             for v in (valor if isinstance(valor, list) else [valor]):
-                linhas.append(f"<{tag}>{escape(str(v))}</{tag}>")
+                if isinstance(v, dict):
+                    filhos = "".join(f"<g:{k}>{escape(str(x))}</g:{k}>" for k, x in v.items())
+                    linhas.append(f"<{tag}>{filhos}</{tag}>")
+                else:
+                    linhas.append(f"<{tag}>{escape(str(v))}</{tag}>")
         linhas.append("</item>")
     linhas += ["</channel>", "</rss>"]
     return "\n".join(linhas)
