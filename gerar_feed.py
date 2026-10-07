@@ -12,6 +12,7 @@ Uso: python gerar_feed.py [saida.xml] [--limite N]
 import gzip
 import html
 import json
+import os
 import re
 import sys
 import time
@@ -23,6 +24,7 @@ SITE = "https://www.safiraarmarinhos.com.br"
 FEED_VNDA = SITE + "/products_google.rss"
 UA = "Mozilla/5.0 (compatible; SafiraFeedBot/1.0; +https://www.safiraarmarinhos.com.br)"
 MAX_FOTOS_EXTRAS = 10
+CODIGO_LOJA = "MATRIZ"  # código da loja no Perfil da Empresa (Praça Generoso Marques)
 TRABALHADORES = 4
 
 # Marcas procuradas no nome do produto (o cadastro costuma terminar com a marca).
@@ -325,6 +327,7 @@ def montar_itens(prod, variantes):
             "product_type": tipo,
             "product_highlight": realces,
             "shipping": frete_item(v.get("weight")),
+            "_qtd": int(v.get("available_quantity") or 0) if disponivel else 0,
         }
         if not item["gtin"]:
             if item["brand"]:
@@ -339,11 +342,11 @@ def gerar_xml(itens):
     linhas = ['<?xml version="1.0" encoding="UTF-8"?>',
               '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">', "<channel>",
               "<title>Safira Armarinhos</title>", f"<link>{SITE}</link>",
-              "<description>Feed de produtos Safira Armarinhos (por cor)</description>"]
+              "<description>Safira Armarinhos</description>"]
     for it in itens:
         linhas.append("<item>")
         for chave, valor in it.items():
-            if valor in (None, "", []):
+            if chave.startswith("_") or valor in (None, "", []):
                 continue
             tag = chave if chave in ("title", "description", "link") else "g:" + chave
             for v in (valor if isinstance(valor, list) else [valor]):
@@ -355,6 +358,14 @@ def gerar_xml(itens):
         linhas.append("</item>")
     linhas += ["</channel>", "</rss>"]
     return "\n".join(linhas)
+
+
+def gerar_local(itens):
+    """Feed de inventário local da loja física (mesmo estoque do site)."""
+    local = [{"store_code": CODIGO_LOJA, "id": it["id"], "availability": it["availability"],
+              "quantity": it["_qtd"], "price": it["price"], "sale_price": it["sale_price"]}
+             for it in itens]
+    return gerar_xml(local)
 
 
 def main():
@@ -383,6 +394,9 @@ def main():
 
     with open(saida, "w", encoding="utf-8") as f:
         f.write(gerar_xml(itens))
+    saida_local = os.path.join(os.path.dirname(saida), "inventario_local.xml")
+    with open(saida_local, "w", encoding="utf-8") as f:
+        f.write(gerar_local(itens))
     em_estoque = sum(1 for i in itens if i["availability"] == "in_stock")
     print(f"OK: {len(itens)} ofertas ({em_estoque} em estoque), {len(erros)} produtos com erro -> {saida}")
     for e in erros[:20]:
