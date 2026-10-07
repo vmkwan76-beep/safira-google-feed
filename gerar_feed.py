@@ -187,7 +187,7 @@ CATEGORIAS_GOOGLE = [
     (("agulha", "circular"), 6139, ""), (("agulha",), 5992, ""),
     (("tesoura",), 504641, ""), (("alfinete de seguranca",), 6101, ""), (("alfinete",), 6159, ""),
     (("marcador",), 6160, ""), (("abridor de casa",), 6161, ""), (("pistola",), 4073, ""),
-    (("cola",), 503745, ""), (("barbante",), 2669, "para Crochê"),
+    (("cola",), 503745, ""), (("lapis",), 16, ""), (("barbante",), 2669, "para Crochê"),
     (("fio de malha",), 2669, "para Crochê"), (("la ",), 2669, "para Crochê e Tricô"),
     (("fio ",), 2669, "para Crochê e Tricô"), (("novelo",), 2669, "para Crochê e Tricô"),
     (("meada",), 49, "para Bordado"), (("mouline",), 49, "para Bordado"),
