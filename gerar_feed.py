@@ -77,6 +77,25 @@ MINUSCULAS = {"de", "da", "do", "das", "dos", "e", "com", "para", "em", "a", "o"
 MANTER = {"G", "KG", "M", "MM", "CM", "MT", "MTS", "N.", "UN", "ML", "TEX"}
 ACENTOS = {"LA": "Lã", "CIRCULO": "Círculo", "LINHA": "Linha", "BEBE": "Bebê",
            "CROCHE": "Crochê", "AGULHA": "Agulha", "LA.": "Lã"}
+# Palavras do cadastro (ERP sem acento) -> forma correta. Só as sem ambiguidade.
+ACENTOS.update({p.upper().translate(str.maketrans("ÁÂÃÀÉÊÍÓÔÕÚÇ", "AAAAEEIOOOUC")): p for p in """
+    Acácia Aço Acrílica Acrílico África Águia Alça Algodão Alumínio Amazônia Anatômica Antúrio Aquário
+    Araçá Araucária Ardósia Armação Artesão Articulação Astúcia Atlântico Azaleia Azulão Baião Báltico
+    Bastão Begônia Berço Biodegradável Botânico Botão Bromélia Cabeça Cadarço Cádmio Calça Calendário
+    Camurça Canário Canção Capitão Carícia Carvão Cerâmica Cítrico Clássico Coleção Constelação
+    Coração Cordão Cortiça Crômio Dália Danúbio Delírio Devoção Diversão Dobrável Egípcia Elástico
+    Elegância Eminência Equilíbrio Espaço Especiaria Estância Faísca Família Fascinação Floção Fresia
+    Fúcsia Fumaça Galáxia Garça Gardênia Gerânio Giratório Gorgurão Hortaliça Hortência Hortênsia
+    Índia Intuição Joia João Legião Lichia Limão Lírio Lúdico Macadâmia Mágica Mágico Magnólia Mão
+    Médio Melão Mercúrio Métrica Milão Minério Místico Mônaco Mônica Náutico Orgânica Pacífico Paçoca
+    Paixão Páprica Pavão Peça Pelúcia Planetário Plantação Plástica Plástico Precisão Pressão
+    Prevenção Princípio Roliço Rústico Salmão Sálvia São Segurança Sensação Sépia Sertão Sintético
+    Solstício Suíço Tapeçaria Terço Topázio Trança Tricô Unicórnio Único Valência Verão Vitória
+    Maçã Lilás Níquel Líquida Válvula Retrátil Mosquetão Viés Botões Máquina Coleção Retrô Tecelã
+    Algodão Diâmetro Pérola Pérolas Cetim Ímã Imã Acessórios Acessório Organizador Bolsinha Prático
+    Prática Ecológica Ecológico Metálica Metálico Metalizado Plush Pingüim Patchwork""".split()})
+ACENTOS.update({"TRICO": "Tricô", "PINGUIM": "Pinguim", "IMA": "Ímã", "JOSE": "José",
+                "LAPIS": "Lápis", "ZIPER": "Zíper"})
 
 
 def baixar(url, tentativas=4):
@@ -182,28 +201,34 @@ def ler_produto(prod):
 # (palavras no nome, sem acento) -> (id da categoria Google, complemento do título)
 # Primeira regra que casar vence. IDs da taxonomia oficial pt-BR do Google.
 CATEGORIAS_GOOGLE = [
-    (("agulha", "croch"), 6127, ""), (("agulha", "trico"), 6139, ""),
-    (("agulha", "tunisiana"), 6127, ""), (("agulha", "maquina"), 4579, ""),
-    (("agulha", "circular"), 6139, ""), (("agulha",), 5992, ""),
-    (("tesoura",), 504641, ""), (("alfinete de seguranca",), 6101, ""), (("alfinete",), 6159, ""),
-    (("marcador",), 6160, ""), (("abridor de casa",), 6161, ""), (("pistola",), 4073, ""),
+    # nomes que contêm palavras de outras regras (linha, fio, tecido, botões, glitter) vêm primeiro
+    (("kit", "amigurumi"), 505370, ""), (("tinta",), 505417, ""), (("caneta para tecido",), 505417, ""),
+    (("corante",), 505415, ""), (("olhos",), 505379, "para Amigurumi"),
+    (("fecho de bolsa",), 6145, "para Bolsas"), (("fita metrica",), 16, ""),
+    (("agulha", "croch"), 6127, "para Crochê"), (("agulha", "trico"), 6139, "para Tricô"),
+    (("agulha", "tunisiana"), 6127, "para Crochê Tunisiano"), (("agulha", "maquina"), 4579, ""),
+    (("agulha", "circular"), 6139, "para Tricô"), (("agulha",), 5992, ""),
+    (("tesoura",), 504641, ""), (("alfinete de seguranca",), 6101, ""),
+    (("alfinete",), 6159, "para Costura"), (("marcador",), 6160, "para Crochê e Tricô"),
+    (("abridor de casa",), 6161, "para Costura"), (("pistola",), 4073, ""),
     (("cola",), 503745, ""), (("lapis",), 16, ""), (("barbante",), 2669, "para Crochê"),
     (("fio de malha",), 2669, "para Crochê"), (("la ",), 2669, "para Crochê e Tricô"),
     (("fio ",), 2669, "para Crochê e Tricô"), (("novelo",), 2669, "para Crochê e Tricô"),
     (("meada",), 49, "para Bordado"), (("mouline",), 49, "para Bordado"),
     (("linha",), 49, ""), (("retros",), 49, ""),
-    (("fita",), 505419, ""), (("vies",), 505412, ""), (("passamanaria",), 505412, ""),
-    (("soutache",), 505412, ""), (("renda",), 505412, ""), (("bordado ingles",), 505412, ""),
-    (("passafita",), 505412, ""), (("sianinha",), 505412, ""), (("elastico",), 6146, ""),
+    (("fita", "cetim"), 505419, "para Laços e Artesanato"), (("fita",), 505419, ""),
+    (("vies",), 505412, "para Costura e Artesanato"), (("passamanaria",), 505412, "para Costura e Artesanato"),
+    (("soutache",), 505412, "para Costura e Artesanato"), (("renda",), 505412, ""),
+    (("bordado ingles",), 505412, ""), (("passafita",), 505412, ""),
+    (("sianinha",), 505412, "para Costura e Artesanato"), (("elastico",), 6146, "para Costura"),
     (("botao",), 4226, ""), (("botoes",), 4226, ""), (("ziper",), 4174, ""),
     (("fecho de bolsa",), 6145, ""), (("fecho",), 4174, ""), (("ilhos",), 505409, ""),
     (("argola",), 505409, ""), (("mosquetao",), 505408, ""), (("lantejoula",), 505410, ""),
     (("glitter",), 505410, ""), (("strass",), 5982, ""), (("pompom",), 505379, ""),
-    (("olhos",), 505379, ""), (("laco",), 505413, ""), (("lacinho",), 505413, ""),
-    (("entremeio",), 32, ""), (("contas",), 32, ""), (("fibra",), 505407, ""),
+    (("laco",), 505413, ""), (("lacinho",), 505413, ""),
+    (("entremeio",), 32, ""), (("contas",), 32, ""), (("fibra",), 505407, "para Enchimento"),
     (("enchimento",), 505407, ""), (("refil de almofada",), 505407, ""), (("feltro",), 47, ""),
     (("tecido",), 47, ""), (("tricoline",), 47, ""), (("eva",), 6117, ""),
-    (("corante",), 505415, ""), (("tinta",), 505417, ""), (("caneta para tecido",), 505417, ""),
     (("toalha de mesa",), 4143, ""), (("kit",), 505370, ""),
 ]
 CATEGORIA_PADRAO = 16  # Artes e entretenimento > Hobbies e artes > Arte e artesanato
@@ -279,10 +304,13 @@ def nome_cor(nome_variante, titulo_pai):
     resto = re.sub(r"\s+-\s*|\s*-\s+", " ", resto.strip(" -*"))
     resto = re.sub(r"^\*\s*|\s\*\s", " ", resto).strip()
     resto = re.sub(r"(?<=\d)-|(?<=\d[A-Za-z])-", " ", resto)
-    do_pai = set(re.findall(r"[a-z0-9]+", sem_acento(titulo_pai).lower())) | {"cor"}
+    # palavras do nome do produto, sem pontuação, e também coladas duas a duas
+    # ('37 ML' -> '37ml'; '1,40M' -> '140m') para reconhecer o nome repetido na cor
+    pai = [re.sub(r"[^a-z0-9]", "", w) for w in sem_acento(titulo_pai).lower().split()]
+    do_pai = set(pai) | {a + b for a, b in zip(pai, pai[1:])} | {"cor"}
     palavras = resto.split()
     while len(palavras) > 1:
-        w = sem_acento(palavras[0]).lower().strip(".,")
+        w = re.sub(r"[^a-z0-9]", "", sem_acento(palavras[0]).lower())
         if w in do_pai or w + "s" in do_pai or w.rstrip("s") in do_pai:
             palavras.pop(0)
         else:
@@ -424,25 +452,62 @@ def titulo_fio(base, ficha, cor, complemento):
     return (base + "".join(" - " + e for e in extras) + fim)[:150]
 
 
+def eh_tamanho(variacao):
+    """Variação que é medida e não cor: '3,0mm', '10mm 80cm', 'N. 8', '125 1.25mm', 'Tamanho P'.
+    Número puro ('Cor 10', 'Cor 20') é código de cor na Círculo — continua como cor."""
+    v = sem_acento(variacao).lower().strip()
+    return bool(re.search(r"\d\s*(mm|cm)\b", v) or v.startswith("tamanho") or re.fullmatch(r"n\.\s*\d+.*", v))
+
+
+def ficha_generica(descricao):
+    """Linhas 'Chave: valor' do bloco DADOS TÉCNICOS (para produtos que não são fio)."""
+    partes = re.split(r"DADOS T[ÉE]CNICOS", descricao, flags=re.I)
+    if len(partes) < 2:
+        return []
+    out = []
+    for linha in partes[1].splitlines():
+        linha = linha.replace("\xa0", " ").strip().lstrip("*").strip()
+        if ":" not in linha or "foto" in linha.lower():
+            continue
+        chave, valor = (p.strip(" .") for p in linha.split(":", 1))
+        if 1 < len(chave) <= 40 and 0 < len(valor) <= 100:
+            out.append({"section_name": "Dados técnicos", "attribute_name": chave[:1].upper() + chave[1:],
+                        "attribute_value": valor})
+    return out[:10]
+
+
 def montar_itens(prod, variantes):
     itens = []
     unica = len(variantes) == 1
     base = titulo_bonito(prod["titulo"])
     descricao = re.sub(r"\n{3,}", "\n\n", prod["descricao"]).strip()[:5000]
     categoria_google, complemento = classificar(prod["titulo"])
-    complemento = f" - {complemento}" if complemento and "croch" not in sem_acento(base).lower() else ""
+    # só acrescenta o uso ("para Crochê") se o nome ainda não diz isso
+    chaves = [w for w in re.findall(r"[a-z]+", sem_acento(complemento).lower()) if w not in ("para", "e")]
+    if not complemento or any(c in sem_acento(base).lower() for c in chaves):
+        complemento = ""
+    else:
+        complemento = f" - {complemento}"
     tipo = tipo_produto(prod.get("categorias", []))
     realces = destaques(prod["descricao"])
     fio = categoria_google == 2669
     ficha = ficha_tecnica(prod["descricao"]) if fio else {}
+    detalhes = detalhes_produto(ficha) if fio else ficha_generica(prod["descricao"])
+    composicao = ficha.get("composicao") or next(
+        (d["attribute_value"] for d in detalhes if sem_acento(d["attribute_name"]).lower().startswith(("composi", "material"))), None)
     for v in variantes:
         cor = "" if unica else nome_cor(v.get("name", ""), prod["titulo"])
+        tamanho = ""
+        if cor and not fio and eh_tamanho(cor):
+            tamanho, cor = re.sub(r"(?i)^tamanho\s*", "", cor), ""
         if fio:
             titulo = titulo_fio(base, ficha, titulo_bonito(cor) if cor else "", complemento)
         else:
             titulo = base
-            if cor:
-                titulo = f"{base} Cor {titulo_bonito(cor)}"
+            if tamanho:
+                titulo = f"{base} - Tamanho {titulo_bonito(tamanho)}"
+            elif cor:
+                titulo = f"{base} - Cor {titulo_bonito(cor)}"
             titulo += complemento
         foto = v.get("image_url") or ""
         if foto.startswith("//"):
@@ -475,12 +540,13 @@ def montar_itens(prod, variantes):
             "gtin": v.get("barcode") if gtin_valido(v.get("barcode")) else None,
             "mpn": None,
             "color": titulo_bonito(cor) if cor else None,
+            "size": titulo_bonito(tamanho)[:100] if tamanho else None,
             "shipping_weight": f'{v["weight"]:.3f} kg' if v.get("weight") else None,
             "google_product_category": categoria_google,
             "product_type": tipo,
             "product_highlight": realces,
-            "material": (composicao_limpa(ficha.get("composicao")) or "")[:200] if fio else None,
-            "product_detail": detalhes_produto(ficha) if fio else [],
+            "material": (composicao_limpa(composicao) or "")[:200] if composicao else None,
+            "product_detail": detalhes,
             "shipping": frete_item(v.get("weight")),
             "_qtd": int(v.get("available_quantity") or 0) if disponivel else 0,
         }
